@@ -187,8 +187,27 @@ class LiteLLMVisionProvider(VisionModelProvider):
         # 调用 LiteLLM
         try:
             # 准备参数
+            effective_model_name = self.model_name
+            
+            # SiliconFlow 特殊处理
+            if self.model_name.lower().startswith("siliconflow/"):
+                # 替换 provider 为 openai
+                if "/" in self.model_name:
+                    effective_model_name = f"openai/{self.model_name.split('/', 1)[1]}"
+                else:
+                    effective_model_name = f"openai/{self.model_name}"
+                
+                # 确保设置了 OPENAI_API_KEY (如果尚未设置)
+                import os
+                if not os.environ.get("OPENAI_API_KEY") and os.environ.get("SILICONFLOW_API_KEY"):
+                    os.environ["OPENAI_API_KEY"] = os.environ.get("SILICONFLOW_API_KEY")
+                    
+                # 确保设置了 base_url (如果尚未设置)
+                if not hasattr(self, '_api_base'):
+                     self._api_base = "https://api.siliconflow.cn/v1"
+
             completion_kwargs = {
-                "model": self.model_name,
+                "model": effective_model_name,
                 "messages": messages,
                 "temperature": kwargs.get("temperature", 1.0),
                 "max_tokens": kwargs.get("max_tokens", 4000)
@@ -197,6 +216,12 @@ class LiteLLMVisionProvider(VisionModelProvider):
             # 如果有自定义 base_url，添加 api_base 参数
             if hasattr(self, '_api_base'):
                 completion_kwargs["api_base"] = self._api_base
+
+            # 支持动态传递 api_key 和 api_base
+            if "api_key" in kwargs:
+                completion_kwargs["api_key"] = kwargs["api_key"]
+            if "api_base" in kwargs:
+                completion_kwargs["api_base"] = kwargs["api_base"]
 
             response = await acompletion(**completion_kwargs)
 
@@ -346,8 +371,27 @@ class LiteLLMTextProvider(TextModelProvider):
         messages = self._build_messages(prompt, system_prompt)
 
         # 准备参数
+        effective_model_name = self.model_name
+        
+        # SiliconFlow 特殊处理
+        if self.model_name.lower().startswith("siliconflow/"):
+            # 替换 provider 为 openai
+            if "/" in self.model_name:
+                effective_model_name = f"openai/{self.model_name.split('/', 1)[1]}"
+            else:
+                effective_model_name = f"openai/{self.model_name}"
+            
+            # 确保设置了 OPENAI_API_KEY (如果尚未设置)
+            import os
+            if not os.environ.get("OPENAI_API_KEY") and os.environ.get("SILICONFLOW_API_KEY"):
+                os.environ["OPENAI_API_KEY"] = os.environ.get("SILICONFLOW_API_KEY")
+                
+            # 确保设置了 base_url (如果尚未设置)
+            if not hasattr(self, '_api_base'):
+                    self._api_base = "https://api.siliconflow.cn/v1"
+
         completion_kwargs = {
-            "model": self.model_name,
+            "model": effective_model_name,
             "messages": messages,
             "temperature": temperature
         }
@@ -368,6 +412,12 @@ class LiteLLMTextProvider(TextModelProvider):
         # 如果有自定义 base_url，添加 api_base 参数
         if hasattr(self, '_api_base'):
             completion_kwargs["api_base"] = self._api_base
+
+        # 支持动态传递 api_key 和 api_base (修复认证问题)
+        if "api_key" in kwargs:
+            completion_kwargs["api_key"] = kwargs["api_key"]
+        if "api_base" in kwargs:
+            completion_kwargs["api_base"] = kwargs["api_base"]
 
         try:
             # 调用 LiteLLM（自动重试）
